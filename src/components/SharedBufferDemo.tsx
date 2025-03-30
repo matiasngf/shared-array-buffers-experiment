@@ -161,8 +161,6 @@ function SharedBufferDemo() {
 
   return (
     <div className="shared-buffer-demo">
-      <h2>SharedArrayBuffer Demo</h2>
-
       <div className="controls" style={{ marginBottom: "20px" }}>
         <div>
           <label htmlFor="buffer-size">Buffer Size: </label>
@@ -195,9 +193,7 @@ function SharedBufferDemo() {
           disabled={!isReady || isCalculating}
           style={{ marginTop: "10px" }}
         >
-          {isCalculating
-            ? "Calculating..."
-            : "Run Calculation with SharedArrayBuffer"}
+          {isCalculating ? "Calculating..." : "Run"}
         </button>
       </div>
 
