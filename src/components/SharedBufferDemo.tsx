@@ -8,8 +8,8 @@ const workerUrl = new URL(
 );
 
 function SharedBufferDemo() {
-  const [bufferSize, setBufferSize] = useState(1000);
-  const [iterations, setIterations] = useState(100);
+  const [bufferSize, setBufferSize] = useState(100000);
+  const [iterations, setIterations] = useState(100000);
   const [isCalculating, setIsCalculating] = useState(false);
   const [progress, setProgress] = useState(0);
   const [result, setResult] = useState<number[]>([]);
@@ -52,6 +52,10 @@ function SharedBufferDemo() {
           window.clearInterval(intervalRef.current);
           intervalRef.current = null;
         }
+      } else if (data.type === "progress" && data.progress !== undefined) {
+        // Update progress based on worker's progress report
+        console.log(`Received progress update: ${data.progress}%`);
+        setProgress(data.progress);
       }
     },
   });
@@ -114,7 +118,8 @@ function SharedBufferDemo() {
     setProgress(0);
     setResult([]);
 
-    // Start an interval to check progress
+    // Start an interval to check for completion via the atomic flag
+    // We'll still use this as a backup in case messages are missed
     intervalRef.current = window.setInterval(() => {
       if (!sharedBufferRef.current.syncFlag) {
         console.error("Sync flag is null in interval");
@@ -144,10 +149,8 @@ function SharedBufferDemo() {
           window.clearInterval(intervalRef.current);
           intervalRef.current = null;
         }
-      } else {
-        // Increment progress for visual feedback (approximation)
-        setProgress((prev) => Math.min(prev + 5, 95));
       }
+      // We don't increment progress here anymore since we get it from the worker
     }, 200);
 
     // Send the shared buffer to the worker

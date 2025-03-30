@@ -11,6 +11,12 @@ interface SharedBufferMessage extends BaseWorkerMessage {
   iterations: number;
 }
 
+// Define progress message type
+interface ProgressMessage {
+  type: 'progress';
+  progress: number;
+}
+
 // Helper function to check if a message is a SharedBufferMessage
 function isSharedBufferMessage(message: BaseWorkerMessage): message is SharedBufferMessage {
   return (
@@ -51,7 +57,13 @@ ctx.addEventListener('message', (event: MessageEvent<BaseWorkerMessage>) => {
       const syncFlag = new Int32Array(data.buffer, syncFlagByteOffset, 1);
 
       // Perform the calculation
-      performSharedCalculation(sharedArray, bufferSize, iterations);
+      performSharedCalculation(sharedArray, bufferSize, iterations, (progress) => {
+        // Report progress back to the main thread
+        ctx.postMessage({
+          type: 'progress',
+          progress
+        } as ProgressMessage);
+      });
 
       // Signal that computation is complete
       console.log('Setting completion flag');
@@ -72,20 +84,35 @@ ctx.addEventListener('message', (event: MessageEvent<BaseWorkerMessage>) => {
 });
 
 // Function to perform calculations directly on the shared buffer
-function performSharedCalculation(sharedArray: Float64Array, size: number, iterations: number): void {
+function performSharedCalculation(
+  sharedArray: Float64Array,
+  size: number,
+  iterations: number,
+  onProgress: (progress: number) => void
+): void {
   // Simulate some heavy computation by filling the array with values
   for (let iter = 0; iter < iterations; iter++) {
+    // Calculate and report progress as a percentage
+    const progress = Math.floor((iter / iterations) * 100);
+
+    // Only report progress every few iterations to avoid message spam
+    if (iter % Math.max(1, Math.floor(iterations / 20)) === 0) {
+      onProgress(progress);
+    }
+
     for (let i = 0; i < size; i++) {
       // Compute a value and store it directly in the shared buffer
       sharedArray[i] = Math.sqrt(i * iter);
+    }
 
-      // Every 1000 iterations, report progress
-      if (iter % 1000 === 0 && i === 0) {
-        console.log(`Worker progress: ${iter}/${iterations} iterations`);
-      }
+    // Every 10 iterations (or every iteration if fewer than 10), report progress
+    if (iter % Math.max(1, Math.floor(iterations / 10)) === 0) {
+      console.log(`Worker progress: ${iter}/${iterations} iterations (${progress}%)`);
     }
   }
 
+  // Report 100% progress when done
+  onProgress(100);
   console.log('Worker completed calculation on shared buffer');
 }
 

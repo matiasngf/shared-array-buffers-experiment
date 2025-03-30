@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 interface WorkerResponse<T = unknown> {
   type: string
   result?: T
+  progress?: number
 }
 
 interface WorkerMessage<P = unknown> {
