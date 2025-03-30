@@ -159,11 +159,72 @@ function SharedBufferDemo() {
     });
   }
 
+  // Styles for the number inputs and controls
+  const inputContainerStyle = {
+    display: "flex",
+    alignItems: "center",
+    marginBottom: "12px",
+  };
+
+  const labelStyle = {
+    minWidth: "120px",
+    fontWeight: 500,
+    marginRight: "10px",
+  };
+
+  const inputStyle = {
+    backgroundColor: "#1a1a1a",
+    border: "1px solid #3f3f3f",
+    borderRadius: "6px",
+    padding: "8px 12px",
+    color: "white",
+    width: "120px",
+    fontSize: "0.9rem",
+    transition: "all 0.2s ease",
+    outline: "none",
+  };
+
+  const inputDisabledStyle = {
+    ...inputStyle,
+    opacity: 0.6,
+    cursor: "not-allowed",
+  };
+
+  const buttonStyle = {
+    backgroundColor: "#646cff",
+    color: "white",
+    border: "none",
+    borderRadius: "6px",
+    padding: "10px 16px",
+    fontWeight: 500,
+    cursor: isReady && !isCalculating ? "pointer" : "not-allowed",
+    opacity: isReady && !isCalculating ? 1 : 0.7,
+    transition: "all 0.2s ease",
+    marginTop: "20px",
+    width: "100%",
+    maxWidth: "300px",
+  };
+
   return (
-    <div className="shared-buffer-demo">
-      <div className="controls" style={{ marginBottom: "20px" }}>
-        <div>
-          <label htmlFor="buffer-size">Buffer Size: </label>
+    <div className="shared-buffer-demo" style={{ padding: "20px" }}>
+      <h2 style={{ marginBottom: "24px", fontSize: "1.8rem", fontWeight: 600 }}>
+        SharedArrayBuffer Demo
+      </h2>
+
+      <div
+        className="controls"
+        style={{
+          marginBottom: "30px",
+          backgroundColor: "rgba(0,0,0,0.1)",
+          padding: "20px",
+          borderRadius: "8px",
+          boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+        }}
+      >
+        <div style={inputContainerStyle}>
+          <label htmlFor="buffer-size" style={labelStyle}>
+            Buffer Size:
+          </label>
           <input
             id="buffer-size"
             type="number"
@@ -172,11 +233,27 @@ function SharedBufferDemo() {
             value={bufferSize}
             onChange={(e) => setBufferSize(Number(e.target.value))}
             disabled={isCalculating}
+            style={isCalculating ? inputDisabledStyle : inputStyle}
+            onMouseOver={(e) => {
+              if (!isCalculating) {
+                e.currentTarget.style.borderColor = "#646cff";
+                e.currentTarget.style.boxShadow =
+                  "0 0 0 2px rgba(100, 108, 255, 0.2)";
+              }
+            }}
+            onMouseOut={(e) => {
+              if (!isCalculating) {
+                e.currentTarget.style.borderColor = "#3f3f3f";
+                e.currentTarget.style.boxShadow = "none";
+              }
+            }}
           />
         </div>
 
-        <div style={{ marginTop: "10px" }}>
-          <label htmlFor="iterations">Iterations: </label>
+        <div style={inputContainerStyle}>
+          <label htmlFor="iterations" style={labelStyle}>
+            Iterations:
+          </label>
           <input
             id="iterations"
             type="number"
@@ -185,22 +262,54 @@ function SharedBufferDemo() {
             value={iterations}
             onChange={(e) => setIterations(Number(e.target.value))}
             disabled={isCalculating}
+            style={isCalculating ? inputDisabledStyle : inputStyle}
+            onMouseOver={(e) => {
+              if (!isCalculating) {
+                e.currentTarget.style.borderColor = "#646cff";
+                e.currentTarget.style.boxShadow =
+                  "0 0 0 2px rgba(100, 108, 255, 0.2)";
+              }
+            }}
+            onMouseOut={(e) => {
+              if (!isCalculating) {
+                e.currentTarget.style.borderColor = "#3f3f3f";
+                e.currentTarget.style.boxShadow = "none";
+              }
+            }}
           />
         </div>
 
-        <button
-          onClick={startSharedCalculation}
-          disabled={!isReady || isCalculating}
-          style={{ marginTop: "10px" }}
-        >
-          {isCalculating ? "Calculating..." : "Run"}
-        </button>
+        <div style={{ display: "flex", justifyContent: "center" }}>
+          <button
+            onClick={startSharedCalculation}
+            disabled={!isReady || isCalculating}
+            style={buttonStyle}
+            onMouseOver={(e) => {
+              if (isReady && !isCalculating) {
+                e.currentTarget.style.backgroundColor = "#535bf2";
+              }
+            }}
+            onMouseOut={(e) => {
+              if (isReady && !isCalculating) {
+                e.currentTarget.style.backgroundColor = "#646cff";
+              }
+            }}
+          >
+            {isCalculating ? "Calculating..." : "Run Shared Buffer Calculation"}
+          </button>
+        </div>
       </div>
 
       {isCalculating && (
         <div
           className="progress-bar-container"
-          style={{ marginBottom: "20px" }}
+          style={{
+            marginBottom: "20px",
+            backgroundColor: "rgba(0,0,0,0.1)",
+            borderRadius: "8px",
+            padding: "15px",
+            boxShadow: "inset 0 1px 3px rgba(0,0,0,0.2)",
+          }}
         >
           <div
             className="progress-bar"
@@ -208,18 +317,50 @@ function SharedBufferDemo() {
               width: `${progress}%`,
               height: "20px",
               backgroundColor: "#646cff",
+              borderRadius: "4px",
               transition: "width 0.3s ease-in-out",
             }}
           />
-          <div style={{ textAlign: "center" }}>{progress}%</div>
+          <div
+            style={{ textAlign: "center", marginTop: "5px", fontWeight: 500 }}
+          >
+            {progress}%
+          </div>
         </div>
       )}
 
       {result.length > 0 && (
-        <div style={{ marginTop: "20px" }}>
-          <h3>Result from Shared Buffer (first 10 values):</h3>
-          <pre>{JSON.stringify(result, null, 2)}</pre>
-          <p>Total size: {bufferSize} elements</p>
+        <div
+          style={{
+            marginTop: "20px",
+            backgroundColor: "rgba(0,0,0,0.1)",
+            borderRadius: "8px",
+            padding: "20px",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+          }}
+        >
+          <h3
+            style={{
+              marginBottom: "10px",
+              fontSize: "1.2rem",
+              fontWeight: 600,
+            }}
+          >
+            Result from Shared Buffer (first 10 values):
+          </h3>
+          <pre
+            style={{
+              backgroundColor: "#1a1a1a",
+              padding: "12px",
+              borderRadius: "6px",
+              overflowX: "auto",
+            }}
+          >
+            {JSON.stringify(result, null, 2)}
+          </pre>
+          <p style={{ marginTop: "10px", fontSize: "0.9rem", opacity: 0.8 }}>
+            Total size: {bufferSize} elements
+          </p>
         </div>
       )}
     </div>
