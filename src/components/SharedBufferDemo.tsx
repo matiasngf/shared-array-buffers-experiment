@@ -14,8 +14,6 @@ function SharedBufferDemo() {
   const [result, setResult] = useState<number[]>([]);
   const intervalRef = useRef<number | null>(null);
 
-  // Create a URL for the shared buffer worker
-
   // Initialize the worker
   const { isReady, sendMessage } = useWorker(workerUrl, {
     onMessage: (data) => {
@@ -44,12 +42,25 @@ function SharedBufferDemo() {
   }, []);
 
   function startSharedCalculation() {
-    // Create a SharedArrayBuffer
-    // Size: Float64Array elements + 1 Int32 for synchronization
-    const bufferByteSize =
-      bufferSize * Float64Array.BYTES_PER_ELEMENT +
-      Int32Array.BYTES_PER_ELEMENT;
-    const sharedBuffer = new SharedArrayBuffer(bufferByteSize);
+    // Calculate sizes with proper alignment
+    const floatArrayByteSize = bufferSize * Float64Array.BYTES_PER_ELEMENT;
+
+    // Ensure alignment for Int32Array by padding if necessary
+    // Float64Array needs 8-byte alignment
+    // Int32Array needs 4-byte alignment
+    // Since Float64Array already ensures 8-byte alignment, we're good
+    const syncFlagByteOffset = floatArrayByteSize;
+
+    // Total buffer size needs to include the Float64Array and Int32Array
+    const totalByteSize = floatArrayByteSize + Int32Array.BYTES_PER_ELEMENT;
+
+    console.log(`Creating SharedArrayBuffer with size ${totalByteSize} bytes`);
+    console.log(
+      `Float64Array: ${floatArrayByteSize} bytes, Int32Array at offset ${syncFlagByteOffset}`
+    );
+
+    // Create the shared buffer
+    const sharedBuffer = new SharedArrayBuffer(totalByteSize);
 
     // Initialize the buffer with zeros
     const sharedArray = new Float64Array(sharedBuffer, 0, bufferSize);
@@ -58,11 +69,7 @@ function SharedBufferDemo() {
     }
 
     // Initialize the sync flag (0 = not done, 1 = done)
-    const syncFlag = new Int32Array(
-      sharedBuffer,
-      bufferSize * Float64Array.BYTES_PER_ELEMENT,
-      1
-    );
+    const syncFlag = new Int32Array(sharedBuffer, syncFlagByteOffset, 1);
     Atomics.store(syncFlag, 0, 0);
 
     console.log(

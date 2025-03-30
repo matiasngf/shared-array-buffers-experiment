@@ -35,21 +35,31 @@ ctx.addEventListener('message', (event: MessageEvent<BaseWorkerMessage>) => {
   if (data.type === 'compute-shared') {
     // Use type guard to ensure the message has the correct structure
     if (isSharedBufferMessage(data)) {
+      // Calculate the proper byte offset for the sync flag
+      const floatArrayByteSize = data.bufferSize * Float64Array.BYTES_PER_ELEMENT;
+      const syncFlagByteOffset = floatArrayByteSize;
+
       // Create typed arrays to work with the shared buffer
-      const sharedArray = new Float64Array(data.buffer);
+      // Specify the byte offset (0) and length explicitly to avoid alignment issues
+      const sharedArray = new Float64Array(data.buffer, 0, data.bufferSize);
       const bufferSize = data.bufferSize;
       const iterations = data.iterations;
 
       console.log(`Worker starting computation with ${iterations} iterations`);
 
+      // Create the sync flag at the proper offset
+      const syncFlag = new Int32Array(data.buffer, syncFlagByteOffset, 1);
+
       // Perform the calculation
       performSharedCalculation(sharedArray, bufferSize, iterations);
 
-      // Signal that computation is complete by setting the last element
-      Atomics.store(new Int32Array(data.buffer, bufferSize * Float64Array.BYTES_PER_ELEMENT), 0, 1);
+      // Signal that computation is complete
+      console.log('Setting completion flag');
+      Atomics.store(syncFlag, 0, 1);
 
       // Notify the main thread that we're done
-      Atomics.notify(new Int32Array(data.buffer, bufferSize * Float64Array.BYTES_PER_ELEMENT), 0, 1);
+      console.log('Notifying main thread');
+      Atomics.notify(syncFlag, 0, 1);
 
       // Also send a message to confirm completion
       ctx.postMessage({
