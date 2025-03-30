@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import useWorker from "../utils/useWorker";
 
+// Define a worker URL outside component to avoid recreation
 const workerUrl = new URL(
   "../workers/shared-buffer.worker.ts",
   import.meta.url
@@ -14,20 +15,43 @@ function SharedBufferDemo() {
   const [result, setResult] = useState<number[]>([]);
   const intervalRef = useRef<number | null>(null);
 
+  // Store references to shared buffer objects so they're accessible in the interval callback
+  const sharedBufferRef = useRef<{
+    buffer: SharedArrayBuffer | null;
+    array: Float64Array | null;
+    syncFlag: Int32Array | null;
+  }>({
+    buffer: null,
+    array: null,
+    syncFlag: null,
+  });
+
   // Initialize the worker
   const { isReady, sendMessage } = useWorker(workerUrl, {
     onMessage: (data) => {
       if (data.type === "shared-complete") {
         console.log("Received shared-complete notification");
+
+        // Read results from the shared buffer after receiving completion message
+        if (sharedBufferRef.current.array) {
+          const results = Array.from(sharedBufferRef.current.array).slice(
+            0,
+            10
+          );
+          console.log("Reading results from shared buffer:", results);
+          setResult(results);
+        } else {
+          console.error("Cannot read results: shared array is null");
+        }
+
         setIsCalculating(false);
+        setProgress(100);
 
         // Stop the progress tracking interval
         if (intervalRef.current) {
           window.clearInterval(intervalRef.current);
           intervalRef.current = null;
         }
-
-        setProgress(100);
       }
     },
   });
@@ -72,6 +96,13 @@ function SharedBufferDemo() {
     const syncFlag = new Int32Array(sharedBuffer, syncFlagByteOffset, 1);
     Atomics.store(syncFlag, 0, 0);
 
+    // Store references for later use
+    sharedBufferRef.current = {
+      buffer: sharedBuffer,
+      array: sharedArray,
+      syncFlag: syncFlag,
+    };
+
     console.log(
       "Starting shared buffer calculation with",
       bufferSize,
@@ -85,15 +116,29 @@ function SharedBufferDemo() {
 
     // Start an interval to check progress
     intervalRef.current = window.setInterval(() => {
+      if (!sharedBufferRef.current.syncFlag) {
+        console.error("Sync flag is null in interval");
+        return;
+      }
+
       // Check if calculation is complete
-      const isDone = Atomics.load(syncFlag, 0) === 1;
+      const isDone = Atomics.load(sharedBufferRef.current.syncFlag, 0) === 1;
 
       if (isDone) {
         // Read results from the shared buffer
-        const results = Array.from(sharedArray).slice(0, 10); // Just show first 10 values
-        setResult(results);
-        setProgress(100);
-        setIsCalculating(false);
+        if (sharedBufferRef.current.array) {
+          const results = Array.from(sharedBufferRef.current.array).slice(
+            0,
+            10
+          );
+          console.log(
+            "Reading results from shared buffer in interval:",
+            results
+          );
+          setResult(results);
+          setProgress(100);
+          setIsCalculating(false);
+        }
 
         if (intervalRef.current) {
           window.clearInterval(intervalRef.current);
