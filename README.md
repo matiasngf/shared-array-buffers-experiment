@@ -1,54 +1,132 @@
-# React + TypeScript + Vite
+# SharedArrayBuffer with Web Workers
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+This project demonstrates how to use SharedArrayBuffer to efficiently share memory between the main thread and web workers.
 
-Currently, two official plugins are available:
+## What is SharedArrayBuffer?
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react/README.md) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+SharedArrayBuffer provides a way to create a fixed-length binary data buffer that can be simultaneously accessed by the main thread and Web Workers. Unlike regular messaging with `postMessage()`, which creates copies of the data, SharedArrayBuffer allows direct access to the same memory region.
 
-## Expanding the ESLint configuration
+## Security Requirements
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+Due to the Spectre and Meltdown vulnerabilities, browsers require specific HTTP headers to use SharedArrayBuffer:
 
-```js
-export default tseslint.config({
-  extends: [
-    // Remove ...tseslint.configs.recommended and replace with this
-    ...tseslint.configs.recommendedTypeChecked,
-    // Alternatively, use this for stricter rules
-    ...tseslint.configs.strictTypeChecked,
-    // Optionally, add this for stylistic rules
-    ...tseslint.configs.stylisticTypeChecked,
-  ],
-  languageOptions: {
-    // other options...
-    parserOptions: {
-      project: ['./tsconfig.node.json', './tsconfig.app.json'],
-      tsconfigRootDir: import.meta.dirname,
-    },
-  },
-})
+```javascript
+// In vite.config.ts
+server: {
+  headers: {
+    'Cross-Origin-Embedder-Policy': 'require-corp',
+    'Cross-Origin-Opener-Policy': 'same-origin'
+  }
+}
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## How SharedArrayBuffer Works in this Project
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+### 1. Creating the Shared Memory
 
-export default tseslint.config({
-  plugins: {
-    // Add the react-x and react-dom plugins
-    'react-x': reactX,
-    'react-dom': reactDom,
-  },
-  rules: {
-    // other rules...
-    // Enable its recommended typescript rules
-    ...reactX.configs['recommended-typescript'].rules,
-    ...reactDom.configs.recommended.rules,
-  },
-})
+```javascript
+// Main thread
+const bufferSize = 1000;
+const floatArrayByteSize = bufferSize * Float64Array.BYTES_PER_ELEMENT;
+const syncFlagByteOffset = floatArrayByteSize;
+const totalByteSize = floatArrayByteSize + Int32Array.BYTES_PER_ELEMENT;
+
+// Create the shared buffer with enough space for data + synchronization
+const sharedBuffer = new SharedArrayBuffer(totalByteSize);
+
+// Create a typed array view on the shared buffer for the data
+const sharedArray = new Float64Array(sharedBuffer, 0, bufferSize);
+
+// Create a typed array view for synchronization (at the end of the buffer)
+const syncFlag = new Int32Array(sharedBuffer, syncFlagByteOffset, 1);
+Atomics.store(syncFlag, 0, 0); // Initialize sync flag to 0 (not done)
 ```
+
+### 2. Sending the Buffer to the Worker
+
+```javascript
+// Send only a reference to the SharedArrayBuffer (no copying)
+worker.postMessage({
+  type: "compute-shared",
+  buffer: sharedBuffer,  // This is transferred, not copied
+  bufferSize,
+  iterations, // some other data we want to send
+});
+```
+
+### 3. Accessing the Shared Memory from the Worker
+
+```javascript
+// Worker thread
+const sharedArray = new Float64Array(data.buffer, 0, data.bufferSize);
+const syncFlag = new Int32Array(data.buffer, syncFlagByteOffset, 1);
+
+// Directly modify the shared memory
+for (let i = 0; i < size; i++) {
+  sharedArray[i] = Math.sqrt(i * iter);
+}
+
+// When done, update the sync flag
+Atomics.store(syncFlag, 0, 1);  // Set to 1 (done)
+Atomics.notify(syncFlag, 0, 1); // Wake waiting threads
+```
+
+### 4. Synchronization with Atomics API
+
+The Atomics API provides thread-safe operations on shared memory:
+
+```javascript
+// Main thread waiting for completion
+const isDone = Atomics.load(syncFlag, 0) === 1;
+if (isDone) {
+  // Read results from the shared memory
+  const results = Array.from(sharedArray).slice(0, 10);
+}
+
+// Worker thread signaling completion
+Atomics.store(syncFlag, 0, 1);    // Thread-safe write
+Atomics.notify(syncFlag, 0, 1);   // Wake up waiting threads
+```
+
+## Key Benefits of SharedArrayBuffer
+
+1. **Performance**: No serialization/deserialization or copying of data
+2. **Memory Efficiency**: Single memory allocation shared between threads
+3. **Real-time Updates**: Main thread can directly observe changes as the worker makes them
+4. **Atomic Operations**: Thread-safe operations via the Atomics API
+
+## Common Pitfalls and Solutions
+
+1. **Memory Alignment**: Ensure proper alignment when creating typed array views
+   ```javascript
+   // Correct:
+   const sharedArray = new Float64Array(buffer, 0, size);
+   // Float64Array needs 8-byte alignment
+   ```
+
+2. **Security Headers**: SharedArrayBuffer requires specific HTTP headers
+   - Cross-Origin-Embedder-Policy: require-corp
+   - Cross-Origin-Opener-Policy: same-origin
+
+3. **Synchronization**: Always use Atomics API for coordination between threads
+   ```javascript
+   // Never use normal assignments for synchronization flags
+   syncFlag[0] = 1;  // WRONG - not thread safe
+   
+   // Instead use:
+   Atomics.store(syncFlag, 0, 1);  // RIGHT - thread safe
+   ```
+
+4. **Type Safety**: When passing SharedArrayBuffer between threads, ensure proper type information
+   ```javascript
+   // Include enough metadata so the receiving thread can correctly interpret the buffer
+   worker.postMessage({
+     buffer: sharedBuffer,
+     bufferSize,
+     dataType: 'Float64Array'
+   });
+   ```
+
+## Browser Support
+
+SharedArrayBuffer is supported in all modern browsers, but requires the proper security headers. See [MDN Web Docs](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/SharedArrayBuffer#browser_compatibility) for more detailed compatibility information.
