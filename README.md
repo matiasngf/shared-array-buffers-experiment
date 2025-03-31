@@ -20,6 +20,8 @@ server: {
 }
 ```
 
+See the [vite.config.ts](./vite.config.ts) file for the complete implementation.
+
 ## How SharedArrayBuffer Works in this Project
 
 ### 1. Creating the Shared Memory
@@ -42,6 +44,8 @@ const syncFlag = new Int32Array(sharedBuffer, syncFlagByteOffset, 1);
 Atomics.store(syncFlag, 0, 0); // Initialize sync flag to 0 (not done)
 ```
 
+This code can be found in the [SharedBufferDemo.tsx](./src/components/SharedBufferDemo.tsx) file.
+
 ### 2. Sending the Buffer to the Worker
 
 ```javascript
@@ -50,9 +54,11 @@ worker.postMessage({
   type: "compute-shared",
   buffer: sharedBuffer,  // This is transferred, not copied
   bufferSize,
-  iterations, // some other data we want to send
+  iterations,
 });
 ```
+
+This is implemented in [SharedBufferDemo.tsx](./src/components/SharedBufferDemo.tsx) using the `sendMessage` function from [useWorker.ts](./src/utils/useWorker.ts).
 
 ### 3. Accessing the Shared Memory from the Worker
 
@@ -71,6 +77,8 @@ Atomics.store(syncFlag, 0, 1);  // Set to 1 (done)
 Atomics.notify(syncFlag, 0, 1); // Wake waiting threads
 ```
 
+This code is implemented in the [shared-buffer.worker.ts](./src/workers/shared-buffer.worker.ts) file.
+
 ### 4. Synchronization with Atomics API
 
 The Atomics API provides thread-safe operations on shared memory:
@@ -87,6 +95,8 @@ if (isDone) {
 Atomics.store(syncFlag, 0, 1);    // Thread-safe write
 Atomics.notify(syncFlag, 0, 1);   // Wake up waiting threads
 ```
+
+The main thread implementation is in [SharedBufferDemo.tsx](./src/components/SharedBufferDemo.tsx) and the worker implementation is in [shared-buffer.worker.ts](./src/workers/shared-buffer.worker.ts).
 
 ## Key Benefits of SharedArrayBuffer
 
@@ -126,6 +136,15 @@ Atomics.notify(syncFlag, 0, 1);   // Wake up waiting threads
      dataType: 'Float64Array'
    });
    ```
+
+## Project File Structure
+
+This project demonstrates SharedArrayBuffer usage with the following key files:
+
+- [vite.config.ts](./vite.config.ts) - Configures security headers for SharedArrayBuffer
+- [src/components/SharedBufferDemo.tsx](./src/components/SharedBufferDemo.tsx) - Main thread implementation
+- [src/workers/shared-buffer.worker.ts](./src/workers/shared-buffer.worker.ts) - Worker thread implementation
+- [src/utils/useWorker.ts](./src/utils/useWorker.ts) - Utility for managing worker communication
 
 ## Browser Support
 
